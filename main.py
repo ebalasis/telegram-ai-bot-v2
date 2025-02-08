@@ -3,8 +3,7 @@ import logging
 import asyncio
 import psycopg2
 from aiogram import Bot, Dispatcher, types
-from aiogram.enums import ParseMode
-import asyncio
+from aiogram.enums import ParseMode  # Διορθωμένο
 from datetime import datetime, timedelta
 from database import connect_db, setup_database
 
@@ -13,11 +12,12 @@ logging.basicConfig(level=logging.INFO)
 
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-DATABASE_URL = os.getenv('postgresql://postgres:jitvcjHcHnWKoMVDMXGPcJhFdukRjukO@roundhouse.proxy.rlwy.net:51799/railway')
+DATABASE_URL = os.getenv('DATABASE_URL')  # Διορθωμένο!
 
 # Δημιουργία bot και dispatcher
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-dp = Dispatcher(bot)
+dp = Dispatcher()  # Διορθωμένο για aiogram v3
+dp["bot"] = bot  # Σύνδεση bot με dispatcher
 
 # Συνάρτηση για να αποθηκεύει υπενθυμίσεις
 async def save_reminder(user_id, message, reminder_time):
@@ -74,14 +74,9 @@ async def remind_command(message: types.Message):
         await message.reply(str(e))
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
-import asyncio
-
 async def main():
-    # Εκκίνηση της υπενθύμισης στο παρασκήνιο
-    asyncio.create_task(check_reminders())
-    
-    # Εκκίνηση του bot
-    await dp.start_polling()
+    asyncio.create_task(check_reminders())  # Εκκίνηση ελέγχου υπενθυμίσεων
+    await dp.start_polling(bot)  # Διορθωμένο!
 
 if __name__ == '__main__':
     asyncio.run(main())
