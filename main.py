@@ -2,8 +2,9 @@ import os
 import logging
 import asyncio
 import psycopg2
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, Router
 from aiogram.enums import ParseMode  # Διορθωμένο
+from aiogram.client.default import DefaultBotProperties  # Προσθέτουμε αυτή τη γραμμή!
 from datetime import datetime, timedelta
 from database import connect_db, setup_database
 
@@ -14,13 +15,10 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')  # Διορθωμένο!
 
-# Δημιουργία bot και dispatcher
-from aiogram.client.default import DefaultBotProperties  # Προσθέτουμε αυτή τη γραμμή!
-
+# Δημιουργία bot και router
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-
-dp = Dispatcher()  # Διορθωμένο για aiogram v3
-dp["bot"] = bot  # Σύνδεση bot με dispatcher
+router = Router()
+dp = Dispatcher()
 
 # Συνάρτηση για να αποθηκεύει υπενθυμίσεις
 async def save_reminder(user_id, message, reminder_time):
@@ -54,12 +52,12 @@ async def check_reminders():
         await asyncio.sleep(60)  # Έλεγχος κάθε λεπτό
 
 # Χειριστής εντολής /start
-@dp.message_handler(commands=['start'])
+@router.message(commands=['start'])
 async def start_command(message: types.Message):
-    await message.reply("👋 Γεια σου! Στείλε /remind <χρόνος σε λεπτά> <μήνυμα> για να αποθηκεύσεις μια υπενθύμιση.")
+    await message.answer("👋 Γεια σου! Στείλε /remind <χρόνος σε λεπτά> <μήνυμα> για να αποθηκεύσεις μια υπενθύμιση.")
 
 # Χειριστής εντολής /remind
-@dp.message_handler(commands=['remind'])
+@router.message(commands=['remind'])
 async def remind_command(message: types.Message):
     try:
         args = message.text.split(maxsplit=2)
@@ -71,15 +69,16 @@ async def remind_command(message: types.Message):
         reminder_time = datetime.now() + timedelta(minutes=minutes)
 
         await save_reminder(message.from_user.id, reminder_text, reminder_time)
-        await message.reply(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {minutes} λεπτά.")
+        await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {minutes} λεπτά.")
 
     except ValueError as e:
-        await message.reply(str(e))
+        await message.answer(str(e))
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
-    asyncio.create_task(check_reminders())  # Εκκίνηση ελέγχου υπενθυμίσεων
-    await dp.start_polling(bot)  # Διορθωμένο!
+    dp.include_router(router)  # Προσθέτουμε τα handlers
+    asyncio.create_task(check_reminders())  # Ξεκινάμε την υπενθύμιση στο background
+    await dp.start_polling(bot)
 
 if __name__ == '__main__':
     asyncio.run(main())
