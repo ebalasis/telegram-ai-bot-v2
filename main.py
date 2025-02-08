@@ -74,9 +74,14 @@ async def remind_command(message: types.Message):
         await message.reply(str(e))
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
-loop = asyncio.get_event_loop()
-loop.create_task(check_reminders())
+import asyncio
+
+async def main():
+    # Εκκίνηση της υπενθύμισης στο παρασκήνιο
+    asyncio.create_task(check_reminders())
+    
+    # Εκκίνηση του bot
+    await dp.start_polling()
 
 if __name__ == '__main__':
-    from aiogram import executor
-    executor.start_polling(dp, skip_updates=True)
+    asyncio.run(main())
