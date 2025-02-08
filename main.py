@@ -3,7 +3,7 @@ import logging
 import asyncio
 import psycopg2
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ParseMode
+from aiogram.enums import ParseMode
 from aiogram.utils import executor
 from datetime import datetime, timedelta
 from database import connect_db, setup_database
