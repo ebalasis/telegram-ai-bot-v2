@@ -15,7 +15,10 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')  # Διορθωμένο!
 
 # Δημιουργία bot και dispatcher
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+from aiogram.client.default import DefaultBotProperties  # Προσθέτουμε αυτή τη γραμμή!
+
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+
 dp = Dispatcher()  # Διορθωμένο για aiogram v3
 dp["bot"] = bot  # Σύνδεση bot με dispatcher
 
