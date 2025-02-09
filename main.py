@@ -78,6 +78,8 @@ async def remind_command(message: types.Message):
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
     dp.include_router(router)  # Προσθέτουμε τα handlers
+    router.message.filter()  # Εξασφαλίζουμε ότι όλα τα φίλτρα φορτώνονται σωστά
+
     asyncio.create_task(check_reminders())  # Ξεκινάμε την υπενθύμιση στο background
     await dp.start_polling(bot)
 
