@@ -27,8 +27,8 @@ def get_greek_time_minus_one_hour():
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
-SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-CALENDAR_ID = os.getenv('CALENDAR_ID')
+SERVICE_ACCOUNT_FILE = os.getenv('GMAIL_API_CREDENTIALS')
+CALENDAR_ID = os.getenv('GOOGLE_CREDENTIALS')
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 # Δημιουργία bot και router
