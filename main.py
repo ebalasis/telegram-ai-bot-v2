@@ -29,8 +29,16 @@ def get_greek_time_minus_one_hour():
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
-SERVICE_ACCOUNT_FILE = os.getenv('GMAIL_API_CREDENTIALS')
-CALENDAR_ID = os.getenv('GOOGLE_CREDENTIALS')
+GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
+GMAIL_API_CREDENTIALS_JSON = os.getenv("GMAIL_API_CREDENTIALS_JSON")
+
+# Μετατροπή του JSON string σε dict
+google_creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+gmail_creds_dict = json.loads(GMAIL_API_CREDENTIALS_JSON)
+
+# Δημιουργία credentials από dict
+google_credentials = service_account.Credentials.from_service_account_info(google_creds_dict, scopes=['https://www.googleapis.com/auth/calendar'])
+gmail_credentials = service_account.Credentials.from_service_account_info(gmail_creds_dict, scopes=['https://www.googleapis.com/auth/gmail.readonly'])
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 # Δημιουργία bot και router
@@ -42,7 +50,7 @@ dp = Dispatcher()
 import json
 
 def get_calendar_service():
-    credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+    credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
 
     if not credentials_json:
         logging.error("❌ GOOGLE_CREDENTIALS δεν έχει οριστεί στο περιβάλλον.")
