@@ -1,7 +1,6 @@
 import os
 import logging
 import asyncio
-import json
 import psycopg2
 from aiogram import Bot, Dispatcher, types, Router
 from aiogram.enums import ParseMode
@@ -21,62 +20,70 @@ GR_TZ = timezone('Europe/Athens')
 def get_greek_time_minus_one_hour():
     return datetime.now(GR_TZ) - timedelta(hours=1)
 
+# Google Calendar API
+SERVICE_ACCOUNT_FILE = "ilias-calendar-api.json"
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
+CREDENTIALS = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+CALENDAR_ID = "ebalasis@yahoo.gr"
+
+def get_calendar_service():
+    return build("calendar", "v3", credentials=CREDENTIALS)
+
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
-GOOGLE_CREDENTIALS = os.getenv('GOOGLE_CREDENTIALS')
-
-# Ρύθμιση του Google Calendar API
-if not GOOGLE_CREDENTIALS:
-    raise ValueError("❌ Δεν βρέθηκε η μεταβλητή GOOGLE_CREDENTIALS. Βεβαιώσου ότι την πρόσθεσες στο Railway!")
-credentials_info = json.loads(GOOGLE_CREDENTIALS)
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
-credentials = service_account.Credentials.from_service_account_info(credentials_info, scopes=SCOPES)
-service = build("calendar", "v3", credentials=credentials)
-CALENDAR_ID = "ebalasis@yahoo.gr"  # Βεβαιώσου ότι είναι σωστό το email του ημερολογίου σου
 
 # Δημιουργία bot και router
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 router = Router()
 dp = Dispatcher()
 
-# **Χειριστής εντολής /events (Προβολή επόμενων γεγονότων)**
+# **Χειριστής εντολής /events (Εμφάνιση επερχόμενων γεγονότων)**
 @router.message(Command("events"))
-async def list_calendar_events(message: types.Message):
-    now = datetime.utcnow().isoformat() + "Z"
-    events_result = service.events().list(calendarId=CALENDAR_ID, timeMin=now, maxResults=5, singleEvents=True, orderBy="startTime").execute()
-    events = events_result.get("items", [])
+async def list_events(message: types.Message):
+    service = get_calendar_service()
+    now = datetime.utcnow().isoformat() + 'Z'
+    events_result = service.events().list(calendarId=CALENDAR_ID, timeMin=now, maxResults=5, singleEvents=True, orderBy='startTime').execute()
+    events = events_result.get('items', [])
+
     if not events:
-        await message.answer("📅 Δεν υπάρχουν προγραμματισμένα γεγονότα.")
+        await message.answer("Δεν υπάρχουν προγραμματισμένα γεγονότα.")
         return
-    event_list = "\n".join([f"📌 {event['summary']} - {event['start'].get('dateTime', event['start'].get('date'))}" for event in events])
-    await message.answer(f"📆 Επόμενα γεγονότα:\n{event_list}")
+
+    event_list = "\n".join([f"📅 {event['summary']} στις {event['start'].get('dateTime', event['start'].get('date'))}" for event in events])
+    await message.answer(f"📋 Επόμενα γεγονότα:\n{event_list}")
 
 # **Χειριστής εντολής /add_event (Προσθήκη νέου γεγονότος)**
 @router.message(Command("add_event"))
-async def add_calendar_event(message: types.Message):
+async def add_event(message: types.Message):
     try:
-        args = message.text.split(maxsplit=4)
-        if len(args) < 5:
-            await message.answer("❌ Χρήση: /add_event <Ημερομηνία YYYY-MM-DD> <Ώρα HH:MM> <Διάρκεια σε λεπτά> <Τίτλος>")
-            return
-        date, time, duration, summary = args[1], args[2], int(args[3]), args[4]
-        start_time = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
-        end_time = start_time + timedelta(minutes=duration)
+        args = message.text.split(maxsplit=2)
+        if len(args) < 3:
+            raise ValueError("❌ Χρήση: /add_event <YYYY-MM-DD HH:MM> <Τίτλος>")
+        
+        event_time_str = args[1]
+        event_title = args[2]
+        event_time = datetime.strptime(event_time_str, "%Y-%m-%d %H:%M").isoformat()
+        
         event = {
-            "summary": summary,
-            "start": {"dateTime": start_time.isoformat(), "timeZone": "Europe/Athens"},
-            "end": {"dateTime": end_time.isoformat(), "timeZone": "Europe/Athens"},
+            'summary': event_title,
+            'start': {'dateTime': event_time, 'timeZone': 'Europe/Athens'},
+            'end': {'dateTime': (datetime.strptime(event_time_str, "%Y-%m-%d %H:%M") + timedelta(hours=1)).isoformat(), 'timeZone': 'Europe/Athens'},
         }
-        service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-        await message.answer(f"✅ Προστέθηκε το γεγονός: {summary} στις {date} {time}!")
+        
+        service = get_calendar_service()
+        event_result = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+        
+        await message.answer(f"✅ Το γεγονός '{event_title}' προστέθηκε για {event_time_str}!")
+    except ValueError as e:
+        await message.answer(str(e))
     except Exception as e:
-        await message.answer(f"❌ Σφάλμα: {e}")
+        logging.error(f"❌ Σφάλμα προσθήκης γεγονότος: {e}")
+        await message.answer("❌ Σφάλμα κατά την προσθήκη του γεγονότος. Βεβαιώσου ότι η ημερομηνία είναι στη σωστή μορφή.")
 
-# **Εκκίνηση της υπενθύμισης στο παρασκήνιο**
+# **Εκκίνηση του bot**
 async def main():
     dp.include_router(router)
-    asyncio.create_task(check_reminders())
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
