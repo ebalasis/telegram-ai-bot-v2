@@ -25,14 +25,16 @@ dp = Dispatcher()
 async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
     conn, cursor = connect_db()
     try:
+        logging.info(f"📝 Αποθήκευση υπενθύμισης -> User: {user_id}, Msg: {message}, Time: {reminder_time}, Repeat: {repeat_interval}")
+
         cursor.execute(
             "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
             (user_id, message, reminder_time, repeat_interval)
         )
         conn.commit()
-        logging.info(f"✅ Υπενθύμιση αποθηκεύτηκε: {message} για {reminder_time} (Επανάληψη: {repeat_interval})")
+        logging.info("✅ Η υπενθύμιση αποθηκεύτηκε επιτυχώς!")
     except Exception as e:
-        logging.error(f"❌ Σφάλμα στην αποθήκευση υπενθύμισης: {e}")
+        logging.error(f"❌ Σφάλμα κατά την αποθήκευση υπενθύμισης: {e}")
     finally:
         cursor.close()
         conn.close()
