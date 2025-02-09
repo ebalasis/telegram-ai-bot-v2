@@ -3,9 +3,9 @@ import logging
 import asyncio
 import psycopg2
 from aiogram import Bot, Dispatcher, types, Router
-from aiogram.enums import ParseMode  # Διορθωμένο
-from aiogram.client.default import DefaultBotProperties  # Προσθέτουμε αυτή τη γραμμή!
-from aiogram.filters import Command  # Νέα εισαγωγή για commands
+from aiogram.enums import ParseMode  
+from aiogram.client.default import DefaultBotProperties  
+from aiogram.filters import Command  
 from datetime import datetime, timedelta
 from database import connect_db, setup_database
 import re
@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-DATABASE_URL = os.getenv('DATABASE_URL')  # Διορθωμένο!
+DATABASE_URL = os.getenv('DATABASE_URL')  
 
 # Δημιουργία bot και router
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -54,7 +54,7 @@ async def check_reminders():
 
         cursor.close()
         conn.close()
-        await asyncio.sleep(60)  # Έλεγχος κάθε λεπτό
+        await asyncio.sleep(60)  
 
 # Χειριστής εντολής /start
 @router.message(Command("start"))
@@ -99,16 +99,32 @@ async def remind_command(message: types.Message):
     except ValueError as e:
         await message.answer(str(e))
 
+# **Χειριστής εντολής /list_reminders**
+@router.message(Command("list_reminders"))
+async def list_reminders(message: types.Message):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT message, reminder_time FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
+    reminders = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not reminders:
+        await message.answer("❌ Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
+        return
+
+    reminder_text = "\n".join([f"📅 {r[1].strftime('%Y-%m-%d %H:%M')} - {r[0]}" for r in reminders])
+    await message.answer(f"📌 Οι υπενθυμίσεις σου:\n{reminder_text}")
+
 # **Debugging handler για όλα τα μηνύματα**
 @router.message()
 async def catch_all_messages(message: types.Message):
-    logging.info(f"📩 Λήφθηκε μήνυμα: {message.text}")  # Debug στο log
+    logging.info(f"📩 Λήφθηκε μήνυμα: {message.text}")  
     await message.answer(f"🛠 Debug: Το μήνυμά σου είναι -> {message.text}")
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
-    dp.include_router(router)  # Προσθέτουμε τα handlers
-    asyncio.create_task(check_reminders())  # Ξεκινάμε την υπενθύμιση στο background
+    dp.include_router(router)  
+    asyncio.create_task(check_reminders())  
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
