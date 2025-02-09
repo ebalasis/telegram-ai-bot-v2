@@ -11,6 +11,8 @@ from database import connect_db, setup_database
 from pytz import timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+import json
+from google.oauth2 import service_account
 
 # Telegram ID χρήστη για ειδοποιήσεις
 TELEGRAM_USER_ID = 5375897237  
