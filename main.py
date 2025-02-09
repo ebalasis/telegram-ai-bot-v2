@@ -23,21 +23,21 @@ router = Router()
 dp = Dispatcher()
 
 # Συνάρτηση για να αποθηκεύει υπενθυμίσεις
+# Συνάρτηση για να αποθηκεύει υπενθυμίσεις
 async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
+    conn, cursor = connect_db()
+    
     try:
-        conn, cursor = connect_db()
-        logging.info(f"Saving reminder: user_id={user_id}, message={message}, time={reminder_time}, repeat={repeat_interval}")
-        
+        # DEBUG: Δες τι προσπαθεί να αποθηκεύσει
+        logging.info(f"📝 Αποθήκευση υπενθύμισης: User: {user_id}, Msg: {message}, Time: {reminder_time}, Repeat: {repeat_interval}")
+
         cursor.execute(
             "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
             (user_id, message, reminder_time, repeat_interval)
         )
         conn.commit()
-        logging.info("Reminder saved successfully!")
-
     except Exception as e:
-        logging.error(f"Error saving reminder: {e}")
-    
+        logging.error(f"❌ Σφάλμα στην αποθήκευση υπενθύμισης: {e}")
     finally:
         cursor.close()
         conn.close()
