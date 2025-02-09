@@ -28,7 +28,7 @@ async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
     conn, cursor = connect_db()
     cursor.execute(
         "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
-        (user_id, message, reminder_time, repeat_interval)
+        (user_id, message, reminder_time)
     )
     conn.commit()
     cursor.close()
