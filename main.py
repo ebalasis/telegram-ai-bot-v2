@@ -96,6 +96,29 @@ async def list_reminders(message: types.Message):
 
     await message.answer(response)
 
+# Χειριστής εντολής /delete_reminder
+@router.message(Command("delete_reminder"))
+async def delete_reminder(message: types.Message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            raise ValueError("❌ Χρήση: /delete_reminder <ID>")
+        
+        reminder_id = int(args[1])
+        conn, cursor = connect_db()
+        cursor.execute("DELETE FROM reminders WHERE id = %s AND user_id = %s RETURNING id", (reminder_id, message.from_user.id))
+        deleted = cursor.fetchone()
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        if deleted:
+            await message.answer(f"🗑️ Η υπενθύμιση με ID {reminder_id} διαγράφηκε επιτυχώς.")
+        else:
+            await message.answer("⚠️ Δεν βρέθηκε υπενθύμιση με αυτό το ID.")
+    except ValueError:
+        await message.answer("❌ Το ID πρέπει να είναι αριθμός.")
+
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
     dp.include_router(router)  # Προσθέτουμε τα handlers
