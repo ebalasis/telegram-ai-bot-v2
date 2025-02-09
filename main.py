@@ -3,18 +3,23 @@ import logging
 import asyncio
 import psycopg2
 from aiogram import Bot, Dispatcher, types, Router
-from aiogram.enums import ParseMode
-from aiogram.client.default import DefaultBotProperties
-from aiogram.filters import Command
+from aiogram.enums import ParseMode  
+from aiogram.client.default import DefaultBotProperties  
+from aiogram.filters import Command  
 from datetime import datetime, timedelta
+from pytz import timezone  # Χρήση για τοπική ώρα Ελλάδας
 from database import connect_db, setup_database
+import re
 
-# Ρύθμιση logging για debugging
+# Ρύθμιση logging
 logging.basicConfig(level=logging.INFO)
 
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-DATABASE_URL = os.getenv('DATABASE_URL')
+DATABASE_URL = os.getenv('DATABASE_URL')  
+
+# Ζώνη ώρας Ελλάδας
+GREECE_TZ = timezone('Europe/Athens')
 
 # Δημιουργία bot και router
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
@@ -23,14 +28,15 @@ dp = Dispatcher()
 
 # Συνάρτηση για να αποθηκεύει υπενθυμίσεις
 async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
+    reminder_time = reminder_time.astimezone(GREECE_TZ)  # Μετατροπή σε τοπική ώρα
     conn, cursor = connect_db()
     try:
+        logging.info(f"📝 Αποθήκευση υπενθύμισης: User: {user_id}, Msg: {message}, Time: {reminder_time}, Repeat: {repeat_interval}")
         cursor.execute(
             "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
             (user_id, message, reminder_time, repeat_interval)
         )
         conn.commit()
-        logging.info(f"✅ Υπενθύμιση αποθηκεύτηκε: {message} για {reminder_time} (Επανάληψη: {repeat_interval})")
     except Exception as e:
         logging.error(f"❌ Σφάλμα στην αποθήκευση υπενθύμισης: {e}")
     finally:
@@ -41,41 +47,30 @@ async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
 async def check_reminders():
     while True:
         conn, cursor = connect_db()
-        now = datetime.now()
-
-        logging.info(f"🔍 Έλεγχος υπενθυμίσεων ({now})")
-
-        cursor.execute("SELECT id, user_id, message, reminder_time, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
+        now = datetime.now(GREECE_TZ)
+        cursor.execute("SELECT id, user_id, message, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
         reminders = cursor.fetchall()
 
         for reminder in reminders:
-            reminder_id, user_id, message, reminder_time, repeat_interval = reminder
+            reminder_id, user_id, message, repeat_interval = reminder
+            logging.info(f"⏳ Υπενθύμιση έτοιμη για αποστολή: {message} (User ID: {user_id})")
+            await bot.send_message(user_id, f"🔔 Υπενθύμιση: {message}")
 
-            try:
-                await bot.send_message(user_id, f"🔔 Υπενθύμιση: {message}")
-                logging.info(f"📨 Στάλθηκε υπενθύμιση: {message}")
-
-                if repeat_interval:
-                    next_time = reminder_time + timedelta(seconds=repeat_interval)
-                    cursor.execute("UPDATE reminders SET reminder_time = %s WHERE id = %s", (next_time, reminder_id))
-                    logging.info(f"🔄 Επαναπρογραμματίστηκε για: {next_time}")
-                else:
-                    cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
-                    logging.info(f"🗑 Διαγράφηκε υπενθύμιση ID {reminder_id}")
-
-                conn.commit()
-
-            except Exception as e:
-                logging.error(f"❌ Σφάλμα κατά την αποστολή υπενθύμισης: {e}")
+            if repeat_interval:
+                next_time = now + timedelta(seconds=repeat_interval)
+                cursor.execute("UPDATE reminders SET reminder_time = %s WHERE id = %s", (next_time, reminder_id))
+            else:
+                cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
+            conn.commit()
 
         cursor.close()
         conn.close()
-        await asyncio.sleep(60)
+        await asyncio.sleep(30)  # Έλεγχος κάθε 30 δευτερόλεπτα
 
 # Χειριστής εντολής /start
 @router.message(Command("start"))
 async def start_command(message: types.Message):
-    await message.answer("👋 Γεια σου! Στείλε /remind <αριθμός> <μονάδα χρόνου> <μήνυμα> για να αποθηκεύσεις μια υπενθύμιση. Π.χ. /remind 2 ώρες Να πάρω τηλέφωνο.")
+    await message.answer("👋 Γεια σου! Στείλε /remind [χρόνος] [μονάδα χρόνου] [μήνυμα] για να αποθηκεύσεις μια υπενθύμιση. Π.χ. /remind 2 ώρες Να πάρω τηλέφωνο.")
 
 # Συνάρτηση για μετατροπή χρόνου
 TIME_UNITS = {
@@ -103,16 +98,12 @@ async def remind_command(message: types.Message):
         time_value = args[1]
         time_unit = args[2]
         reminder_text = args[3]
-
+        
         seconds = parse_time_input(time_value, time_unit)
         if seconds is None:
             raise ValueError("❌ Μη έγκυρη μονάδα χρόνου. Δοκίμασε λεπτά, ώρες, μέρες, μήνες, χρόνια.")
 
-        from pytz import timezone
-
-        GR_TZ = timezone('Europe/Athens')  # Ορίζουμε τη ζώνη ώρας Ελλάδας
-        reminder_time = datetime.now(GR_TZ) + timedelta(seconds=seconds)
-
+        reminder_time = datetime.now(GREECE_TZ) + timedelta(seconds=seconds)
         await save_reminder(message.from_user.id, reminder_text, reminder_time)
         await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {time_value} {time_unit}.")
 
@@ -132,13 +123,13 @@ async def list_reminders(message: types.Message):
         await message.answer("❌ Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
         return
 
-    reminder_text = "\n".join([f"📅 {r[1].strftime('%d-%m-%Y %H:%M')} - {r[0]}" for r in reminders])
+    reminder_text = "\n".join([f"📅 {r[1].astimezone(GREECE_TZ).strftime('%Y-%m-%d %H:%M')} - {r[0]}" for r in reminders])
     await message.answer(f"📌 Οι υπενθυμίσεις σου:\n{reminder_text}")
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
-    dp.include_router(router)
-    asyncio.create_task(check_reminders())
+    dp.include_router(router)  
+    asyncio.create_task(check_reminders())  
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
