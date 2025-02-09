@@ -2,7 +2,6 @@ import os
 import logging
 import asyncio
 import psycopg2
-import datetime
 from aiogram import Bot, Dispatcher, types, Router
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -14,12 +13,11 @@ from pytz import timezone
 # Ρύθμιση logging
 logging.basicConfig(level=logging.INFO)
 
-GR_TZ = timedelta(hours=2)  # UTC+2
-def get_greek_time():
-    return datetime.datetime.utcnow() + GR_TZ
 
 # Ζώνη ώρας Ελλάδας
-#GR_TZ = timezone('Europe/Athens')
+GR_TZ = timezone('Europe/Athens')
+def get_greek_time_minus_one_hour():
+    return datetime.now(GR_TZ) - timedelta(hours=1)
 
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -50,7 +48,8 @@ async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
 async def check_reminders():
     while True:
         conn, cursor = connect_db()
-        now = datetime.now(GR_TZ)
+        now = get_greek_time_minus_one_hour()
+
         cursor.execute("SELECT id, user_id, message, reminder_time, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
         reminders = cursor.fetchall()
 
@@ -107,7 +106,7 @@ async def remind_command(message: types.Message):
         if seconds is None:
             raise ValueError("❌ Μη έγκυρη μονάδα χρόνου. Δοκίμασε λεπτά, ώρες, μέρες, μήνες, χρόνια.")
 
-        reminder_time = datetime.now(GR_TZ) + timedelta(seconds=seconds)
+        reminder_time = get_greek_time_minus_one_hour() + timedelta(seconds=seconds)
         await save_reminder(message.from_user.id, reminder_text, reminder_time)
         await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {time_value} {time_unit}.")
 
