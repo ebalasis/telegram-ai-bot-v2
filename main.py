@@ -99,6 +99,14 @@ async def remind_command(message: types.Message):
     except ValueError as e:
         await message.answer(str(e))
 
+#debugger μηνυμάτων
+
+@router.message()
+async def catch_all_messages(message: types.Message):
+    print(f"📩 Λήφθηκε μήνυμα: {message.text}")  # Για debugging
+    await message.answer(f"Έλαβα το μήνυμά σου: {message.text}")
+
+
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
     dp.include_router(router)  # Προσθέτουμε τα handlers
