@@ -2,3 +2,4 @@ flask
 pyTelegramBotAPI
 psycopg2-binary
 aiogram
+psycopg2-binary
