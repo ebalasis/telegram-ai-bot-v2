@@ -5,6 +5,7 @@ import psycopg2
 from aiogram import Bot, Dispatcher, types, Router
 from aiogram.enums import ParseMode  # Διορθωμένο
 from aiogram.client.default import DefaultBotProperties  # Προσθέτουμε αυτή τη γραμμή!
+from aiogram.filters import Command  # Νέα εισαγωγή για commands
 from datetime import datetime, timedelta
 from database import connect_db, setup_database
 
@@ -52,12 +53,12 @@ async def check_reminders():
         await asyncio.sleep(60)  # Έλεγχος κάθε λεπτό
 
 # Χειριστής εντολής /start
-@router.message(commands=['start'])
+@router.message(Command("start"))
 async def start_command(message: types.Message):
     await message.answer("👋 Γεια σου! Στείλε /remind <χρόνος σε λεπτά> <μήνυμα> για να αποθηκεύσεις μια υπενθύμιση.")
 
 # Χειριστής εντολής /remind
-@router.message(commands=['remind'])
+@router.message(Command("remind"))
 async def remind_command(message: types.Message):
     try:
         args = message.text.split(maxsplit=2)
