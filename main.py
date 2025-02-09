@@ -33,6 +33,12 @@ GOOGLE_CREDENTIALS_JSON = os.getenv("GOOGLE_CREDENTIALS_JSON")
 GMAIL_API_CREDENTIALS_JSON = os.getenv("GMAIL_API_CREDENTIALS_JSON")
 
 # Μετατροπή του JSON string σε dict
+if not GOOGLE_CREDENTIALS_JSON:
+    raise ValueError("❌ Η μεταβλητή GOOGLE_CREDENTIALS_JSON είναι κενή!")
+
+if not GMAIL_API_CREDENTIALS_JSON:
+    raise ValueError("❌ Η μεταβλητή GMAIL_API_CREDENTIALS_JSON είναι κενή!")
+
 google_creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
 gmail_creds_dict = json.loads(GMAIL_API_CREDENTIALS_JSON)
 
