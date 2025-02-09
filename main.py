@@ -38,23 +38,40 @@ async def check_reminders():
     while True:
         conn, cursor = connect_db()
         now = datetime.now()
-        cursor.execute("SELECT id, user_id, message, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
+        
+        logging.info(f"🔍 Έλεγχος υπενθυμίσεων για αποστολή... ({now})")
+
+        # Ανακτά τις υπενθυμίσεις που έχουν περάσει το χρονικό όριο
+        cursor.execute("SELECT id, user_id, message, reminder_time, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
         reminders = cursor.fetchall()
 
         for reminder in reminders:
-            reminder_id, user_id, message, repeat_interval = reminder
-            await bot.send_message(user_id, f"🔔 Υπενθύμιση: {message}")
+            reminder_id, user_id, message, reminder_time, repeat_interval = reminder
 
-            if repeat_interval:
-                next_time = now + timedelta(seconds=repeat_interval)
-                cursor.execute("UPDATE reminders SET reminder_time = %s WHERE id = %s", (next_time, reminder_id))
-            else:
-                cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
-            conn.commit()
+            try:
+                # Στέλνουμε το μήνυμα
+                await bot.send_message(user_id, f"🔔 Υπενθύμιση: {message}")
+                logging.info(f"📨 Στάλθηκε υπενθύμιση σε {user_id}: {message}")
+
+                if repeat_interval:
+                    # Αν είναι επαναλαμβανόμενη, ορίζουμε τη νέα ώρα αποστολής
+                    next_time = reminder_time + timedelta(seconds=repeat_interval)
+                    cursor.execute("UPDATE reminders SET reminder_time = %s WHERE id = %s", (next_time, reminder_id))
+                    logging.info(f"🔄 Επαναπρογραμματίστηκε για: {next_time}")
+                else:
+                    # Αν ΔΕΝ είναι επαναλαμβανόμενη, τη διαγράφουμε
+                    cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
+                    logging.info(f"🗑 Διαγράφηκε υπενθύμιση ID {reminder_id}")
+
+                conn.commit()
+
+            except Exception as e:
+                logging.error(f"❌ Σφάλμα κατά την αποστολή υπενθύμισης: {e}")
 
         cursor.close()
         conn.close()
         await asyncio.sleep(60)  # Έλεγχος κάθε λεπτό
+
 
 # Χειριστής εντολής /start
 @router.message(Command("start"))
