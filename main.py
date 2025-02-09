@@ -25,16 +25,15 @@ dp = Dispatcher()
 async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
     conn, cursor = connect_db()
     try:
-        logging.info(f"📝 Αποθήκευση υπενθύμισης -> User: {user_id}, Msg: {message}, Time: {reminder_time}, Repeat: {repeat_interval}")
-
+        logging.info(f"📝 Προσπάθεια αποθήκευσης υπενθύμισης: User={user_id}, Message='{message}', Time={reminder_time}, Repeat={repeat_interval}")
         cursor.execute(
             "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
             (user_id, message, reminder_time, repeat_interval)
         )
         conn.commit()
-        logging.info("✅ Η υπενθύμιση αποθηκεύτηκε επιτυχώς!")
+        logging.info("✅ Υπενθύμιση αποθηκεύτηκε επιτυχώς!")
     except Exception as e:
-        logging.error(f"❌ Σφάλμα κατά την αποθήκευση υπενθύμισης: {e}")
+        logging.error(f"❌ Σφάλμα στην αποθήκευση υπενθύμισης: {e}")
     finally:
         cursor.close()
         conn.close()
@@ -43,7 +42,7 @@ async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
 async def check_reminders():
     while True:
         conn, cursor = connect_db()
-        now = datetime.now() + timedelta(hours=0)  # Προσθήκη 0 ωρών για ώρα Ελλάδας
+        now = datetime.now() + timedelta(hours=2)  # Προσθήκη 2 ωρών για ώρα Ελλάδας
         
         logging.info(f"🔍 Έλεγχος υπενθυμίσεων ({now})")
 
@@ -79,47 +78,25 @@ async def check_reminders():
 async def start_command(message: types.Message):
     await message.answer("👋 Γεια σου! Στείλε /remind <αριθμός> <μονάδα χρόνου> <μήνυμα> για να αποθηκεύσεις μια υπενθύμιση. Π.χ. /remind 2 ώρες Να πάρω τηλέφωνο.")
 
-# Χειριστής εντολής /list_reminders
-@router.message(Command("list_reminders"))
-async def list_reminders(message: types.Message):
-    conn, cursor = connect_db()
-    cursor.execute("SELECT id, message, reminder_time FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
-    reminders = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    if not reminders:
-        await message.answer("❌ Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
-        return
-
-    reminder_text = "\n".join([f"{idx+1}. 📅 {r[2].strftime('%d-%m-%Y %H:%M')} - {r[1]}" for idx, r in enumerate(reminders)])
-    await message.answer(f"📌 Οι υπενθυμίσεις σου:\n{reminder_text}")
-
-# Χειριστής εντολής /delete_reminder
-@router.message(Command("delete_reminder"))
-async def delete_reminder(message: types.Message):
+# Χειριστής εντολής /remind
+@router.message(Command("remind"))
+async def remind_command(message: types.Message):
     try:
-        args = message.text.split()
-        if len(args) < 2:
-            raise ValueError("❌ Χρήση: /delete_reminder <αριθμός υπενθύμισης>")
+        args = message.text.split(maxsplit=3)
+        if len(args) < 4:
+            raise ValueError("❌ Χρήση: /remind <αριθμός> <μονάδα χρόνου> <μήνυμα>")
 
-        reminder_index = int(args[1]) - 1
+        time_value = args[1]
+        time_unit = args[2]
+        reminder_text = args[3]
 
-        conn, cursor = connect_db()
-        cursor.execute("SELECT id FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
-        reminders = cursor.fetchall()
-
-        if 0 <= reminder_index < len(reminders):
-            reminder_id = reminders[reminder_index][0]
-            cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
-            conn.commit()
-            await message.answer("🗑 Υπενθύμιση διαγράφηκε επιτυχώς!")
-        else:
-            await message.answer("❌ Μη έγκυρος αριθμός υπενθύμισης.")
-
-        cursor.close()
-        conn.close()
-
+        seconds = int(time_value) * 60 if time_unit in ["λεπτό", "λεπτά"] else int(time_value) * 3600
+        reminder_time = datetime.now() + timedelta(seconds=seconds)
+        
+        logging.info(f"⏳ Δημιουργία υπενθύμισης για: {reminder_time}")
+        
+        await save_reminder(message.from_user.id, reminder_text, reminder_time)
+        await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {time_value} {time_unit}.")
     except ValueError as e:
         await message.answer(str(e))
 
