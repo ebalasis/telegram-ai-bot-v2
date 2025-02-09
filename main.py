@@ -108,7 +108,11 @@ async def remind_command(message: types.Message):
         if seconds is None:
             raise ValueError("❌ Μη έγκυρη μονάδα χρόνου. Δοκίμασε λεπτά, ώρες, μέρες, μήνες, χρόνια.")
 
-        reminder_time = datetime.now() + timedelta(seconds=seconds)
+        from pytz import timezone
+
+        GR_TZ = timezone('Europe/Athens')  # Ορίζουμε τη ζώνη ώρας Ελλάδας
+        reminder_time = datetime.now(GR_TZ) + timedelta(seconds=seconds)
+
         await save_reminder(message.from_user.id, reminder_text, reminder_time)
         await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {time_value} {time_unit}.")
 
