@@ -54,11 +54,8 @@ async def check_reminders():
 
 # Χειριστής εντολής /start
 @router.message(Command("start"))
-async def start_command(message: types.Message, bot: Bot):
+async def start_command(message: types.Message):
     await message.answer("👋 Γεια σου! Στείλε /remind [χρόνος σε λεπτά] [μήνυμα] για να αποθηκεύσεις μια υπενθύμιση.")
-
-
-
 
 # Χειριστής εντολής /remind
 @router.message(Command("remind"))
@@ -78,11 +75,30 @@ async def remind_command(message: types.Message):
     except ValueError as e:
         await message.answer(str(e))
 
+# Χειριστής εντολής /list_reminders
+@router.message(Command("list_reminders"))
+async def list_reminders(message: types.Message):
+    conn, cursor = connect_db()
+    cursor.execute("SELECT id, message, reminder_time FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
+    reminders = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not reminders:
+        await message.answer("🔹 Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
+        return
+
+    response = "📌 Οι υπενθυμίσεις σου:\n"
+    for reminder in reminders:
+        reminder_id, reminder_text, reminder_time = reminder
+        formatted_time = reminder_time.strftime("%Y-%m-%d %H:%M")
+        response += f"🆔 {reminder_id} | {formatted_time} - {reminder_text}\n"
+
+    await message.answer(response)
+
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
     dp.include_router(router)  # Προσθέτουμε τα handlers
-    router.message.filter()  # Εξασφαλίζουμε ότι όλα τα φίλτρα φορτώνονται σωστά
-
     asyncio.create_task(check_reminders())  # Ξεκινάμε την υπενθύμιση στο background
     await dp.start_polling(bot)
 
