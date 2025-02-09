@@ -24,6 +24,7 @@ dp = Dispatcher()
 
 # Συνάρτηση για να αποθηκεύει υπενθυμίσεις
 async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
+    print(f"📌 DEBUG: Αποθήκευση -> user_id: {user_id}, message: {message}, time: {reminder_time}, repeat: {repeat_interval}")  # Debug
     conn, cursor = connect_db()
     cursor.execute(
         "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
@@ -32,6 +33,7 @@ async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
     conn.commit()
     cursor.close()
     conn.close()
+
 
 # Συνάρτηση που ελέγχει και στέλνει υπενθυμίσεις
 async def check_reminders():
