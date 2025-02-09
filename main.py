@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import psycopg2
+import datetime
 from aiogram import Bot, Dispatcher, types, Router
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -13,8 +14,12 @@ from pytz import timezone
 # Ρύθμιση logging
 logging.basicConfig(level=logging.INFO)
 
+GR_TZ = timedelta(hours=2)  # UTC+2
+def get_greek_time():
+    return datetime.datetime.utcnow() + GR_TZ
+
 # Ζώνη ώρας Ελλάδας
-GR_TZ = timezone('Europe/Athens')
+#GR_TZ = timezone('Europe/Athens')
 
 # Φόρτωση περιβάλλοντος
 BOT_TOKEN = os.getenv('BOT_TOKEN')
