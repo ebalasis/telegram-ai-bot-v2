@@ -38,6 +38,7 @@ if not GOOGLE_CREDENTIALS_JSON:
 
 if not GMAIL_API_CREDENTIALS_JSON:
     raise ValueError("❌ Η μεταβλητή GMAIL_API_CREDENTIALS_JSON είναι κενή!")
+print(f"GOOGLE_CREDENTIALS_JSON: {repr(GOOGLE_CREDENTIALS_JSON)}")
 
 google_creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
 gmail_creds_dict = json.loads(GMAIL_API_CREDENTIALS_JSON)
