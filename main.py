@@ -55,7 +55,8 @@ async def check_reminders():
 # Χειριστής εντολής /start
 @router.message(Command("start"))
 async def start_command(message: types.Message, bot: Bot):
-    await message.answer("👋 Γεια σου! Στείλε /remind `χρόνος σε λεπτά` `μήνυμα` για να αποθηκεύσεις μια υπενθύμιση.", parse_mode="MarkdownV2")
+    await message.answer("👋 Γεια σου! Στείλε /remind [χρόνος σε λεπτά] [μήνυμα] για να αποθηκεύσεις μια υπενθύμιση.")
+
 
 
 
