@@ -12,11 +12,15 @@ from pytz import timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
+# Telegram ID χρήστη για ειδοποιήσεις
+TELEGRAM_USER_ID = 5375897237  
+
 # Ρύθμιση logging
 logging.basicConfig(level=logging.INFO)
 
 # Ζώνη ώρας Ελλάδας
 GR_TZ = timezone('Europe/Athens')
+
 def get_greek_time_minus_one_hour():
     return datetime.now(GR_TZ) - timedelta(hours=1)
 
@@ -24,7 +28,7 @@ def get_greek_time_minus_one_hour():
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATABASE_URL = os.getenv('DATABASE_URL')
 SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-CALENDAR_ID = os.getenv('CALENDAR_ID')  # Βάλε το ID του ημερολογίου σου
+CALENDAR_ID = os.getenv('CALENDAR_ID')
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 # Δημιουργία bot και router
@@ -36,6 +40,77 @@ dp = Dispatcher()
 def get_calendar_service():
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('calendar', 'v3', credentials=creds)
+
+# **Συνάρτηση για αποθήκευση υπενθυμίσεων**
+async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
+    conn, cursor = connect_db()
+    try:
+        cursor.execute(
+            "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
+            (user_id, message, reminder_time, repeat_interval)
+        )
+        conn.commit()
+        logging.info(f"✅ Υπενθύμιση αποθηκεύτηκε: {message} για {reminder_time} (Επανάληψη: {repeat_interval})")
+        await bot.send_message(user_id, f"✅ Η υπενθύμιση σου αποθηκεύτηκε: {message} για {reminder_time.strftime('%d-%m-%Y %H:%M')}")
+    except Exception as e:
+        logging.error(f"❌ Σφάλμα στην αποθήκευση υπενθύμισης: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+# **Συνάρτηση που ελέγχει και στέλνει υπενθυμίσεις**
+async def check_reminders():
+    while True:
+        conn, cursor = connect_db()
+        now = get_greek_time_minus_one_hour()
+
+        cursor.execute("SELECT id, user_id, message, reminder_time, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
+        reminders = cursor.fetchall()
+
+        for reminder in reminders:
+            reminder_id, user_id, message, reminder_time, repeat_interval = reminder
+            try:
+                await bot.send_message(user_id, f"🔔 Υπενθύμιση: {message}")
+                if repeat_interval:
+                    next_time = reminder_time + timedelta(seconds=repeat_interval)
+                    cursor.execute("UPDATE reminders SET reminder_time = %s WHERE id = %s", (next_time, reminder_id))
+                else:
+                    cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
+                conn.commit()
+            except Exception as e:
+                logging.error(f"❌ Σφάλμα κατά την αποστολή υπενθύμισης: {e}")
+
+        cursor.close()
+        conn.close()
+        await asyncio.sleep(60)
+
+# **Χειριστής εντολής /start**
+@router.message(Command("start"))
+async def start_command(message: types.Message):
+    logging.info(f"📩 Λήφθηκε το /start από τον χρήστη {message.from_user.id}")
+    await message.answer("👋 Γεια σου! Το bot είναι έτοιμο. Χρησιμοποίησε τις διαθέσιμες εντολές για να διαχειριστείς τις υπενθυμίσεις και το ημερολόγιό σου.")
+
+# **Χειριστής εντολής /remind**
+@router.message(Command("remind"))
+async def remind_command(message: types.Message):
+    try:
+        args = message.text.split(maxsplit=3)
+        if len(args) < 4:
+            raise ValueError("❌ Χρήση: /remind <αριθμός> <μονάδα χρόνου> <μήνυμα>")
+
+        time_value = args[1]
+        time_unit = args[2]
+        reminder_text = args[3]
+
+        TIME_UNITS = {"λεπτό": 60, "λεπτά": 60, "ώρα": 3600, "ώρες": 3600}
+        seconds = int(time_value) * TIME_UNITS.get(time_unit, 0)
+        if seconds == 0:
+            raise ValueError("❌ Μη έγκυρη μονάδα χρόνου.")
+
+        reminder_time = get_greek_time_minus_one_hour() + timedelta(seconds=seconds)
+        await save_reminder(message.from_user.id, reminder_text, reminder_time)
+    except ValueError as e:
+        await message.answer(str(e))
 
 # **Χειριστής εντολής /list_events**
 @router.message(Command("list_events"))
@@ -72,12 +147,14 @@ async def add_event(message: types.Message):
         service = get_calendar_service()
         event = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
         await message.answer(f"✅ Το γεγονός '{event_title}' προστέθηκε στο ημερολόγιο!")
+        await bot.send_message(TELEGRAM_USER_ID, f"📅 Προστέθηκε νέο γεγονός: {event_title} στις {args[1]}")
     except Exception as e:
         await message.answer(f"❌ Σφάλμα: {str(e)}")
 
-# **Εκκίνηση της υπενθύμισης στο παρασκήνιο**
+# **Εκκίνηση του bot**
 async def main():
     dp.include_router(router)
+    asyncio.create_task(check_reminders())
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
