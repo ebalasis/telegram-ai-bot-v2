@@ -108,7 +108,7 @@ async def remind_command(message: types.Message):
         if seconds is None:
             raise ValueError("❌ Μη έγκυρη μονάδα χρόνου. Δοκίμασε λεπτά, ώρες, μέρες, μήνες, χρόνια.")
 
-        reminder_time = datetime.now() + timedelta(seconds=seconds, hours=2)  # Προσθήκη 2 ωρών
+        reminder_time = datetime.now() + timedelta(seconds=seconds, hours=0)  # Προσθήκη 2 ωρών
 
         await save_reminder(message.from_user.id, reminder_text, reminder_time)
         await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {time_value} {time_unit}.")
@@ -116,21 +116,33 @@ async def remind_command(message: types.Message):
     except ValueError as e:
         await message.answer(str(e))
 
-# Χειριστής εντολής /list_reminders
-@router.message(Command("list_reminders"))
-async def list_reminders(message: types.Message):
-    conn, cursor = connect_db()
-    cursor.execute("SELECT message, reminder_time FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
-    reminders = cursor.fetchall()
-    cursor.close()
-    conn.close()
+# Χειριστής εντολής /delete_reminder
+@router.message(Command("delete_reminder"))
+async def delete_reminder(message: types.Message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            raise ValueError("❌ Χρήση: /delete_reminder <αριθμός υπενθύμισης>")
 
-    if not reminders:
-        await message.answer("❌ Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
-        return
+        reminder_index = int(args[1]) - 1
 
-    reminder_text = "\n".join([f"📅 {(r[1] + timedelta(hours=0)).strftime('%d-%m-%Y %H:%M')} - {r[0]}" for r in reminders])
-    await message.answer(f"📌 Οι υπενθυμίσεις σου:\n{reminder_text}")
+        conn, cursor = connect_db()
+        cursor.execute("SELECT id FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
+        reminders = cursor.fetchall()
+
+        if 0 <= reminder_index < len(reminders):
+            reminder_id = reminders[reminder_index][0]
+            cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
+            conn.commit()
+            await message.answer("🗑 Υπενθύμιση διαγράφηκε επιτυχώς!")
+        else:
+            await message.answer("❌ Μη έγκυρος αριθμός υπενθύμισης.")
+
+        cursor.close()
+        conn.close()
+
+    except ValueError as e:
+        await message.answer(str(e))
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
