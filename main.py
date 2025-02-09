@@ -129,7 +129,7 @@ async def list_reminders(message: types.Message):
         await message.answer("❌ Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
         return
 
-    reminder_text = "\n".join([f"📅 {(r[1] + timedelta(hours=2)).strftime('%d-%m-%Y %H:%M')} - {r[0]}" for r in reminders])
+    reminder_text = "\n".join([f"📅 {(r[1] + timedelta(hours=0)).strftime('%d-%m-%Y %H:%M')} - {r[0]}" for r in reminders])
     await message.answer(f"📌 Οι υπενθυμίσεις σου:\n{reminder_text}")
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
