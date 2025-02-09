@@ -8,6 +8,7 @@ from aiogram.client.default import DefaultBotProperties  # Προσθέτουμ�
 from aiogram.filters import Command  # Νέα εισαγωγή για commands
 from datetime import datetime, timedelta
 from database import connect_db, setup_database
+import re
 
 # Ρύθμιση logging
 logging.basicConfig(level=logging.INFO)
@@ -22,11 +23,11 @@ router = Router()
 dp = Dispatcher()
 
 # Συνάρτηση για να αποθηκεύει υπενθυμίσεις
-async def save_reminder(user_id, message, reminder_time):
+async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
     conn, cursor = connect_db()
     cursor.execute(
-        "INSERT INTO reminders (user_id, message, reminder_time) VALUES (%s, %s, %s)",
-        (user_id, message, reminder_time)
+        "INSERT INTO reminders (user_id, message, reminder_time, repeat_interval) VALUES (%s, %s, %s, %s)",
+        (user_id, message, reminder_time, repeat_interval)
     )
     conn.commit()
     cursor.close()
@@ -37,15 +38,18 @@ async def check_reminders():
     while True:
         conn, cursor = connect_db()
         now = datetime.now()
-        cursor.execute("SELECT id, user_id, message FROM reminders WHERE reminder_time <= %s", (now,))
+        cursor.execute("SELECT id, user_id, message, repeat_interval FROM reminders WHERE reminder_time <= %s", (now,))
         reminders = cursor.fetchall()
 
         for reminder in reminders:
-            reminder_id, user_id, message = reminder
+            reminder_id, user_id, message, repeat_interval = reminder
             await bot.send_message(user_id, f"🔔 Υπενθύμιση: {message}")
 
-            # Διαγραφή μετά την αποστολή
-            cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
+            if repeat_interval:
+                next_time = now + timedelta(seconds=repeat_interval)
+                cursor.execute("UPDATE reminders SET reminder_time = %s WHERE id = %s", (next_time, reminder_id))
+            else:
+                cursor.execute("DELETE FROM reminders WHERE id = %s", (reminder_id,))
             conn.commit()
 
         cursor.close()
@@ -55,69 +59,45 @@ async def check_reminders():
 # Χειριστής εντολής /start
 @router.message(Command("start"))
 async def start_command(message: types.Message):
-    await message.answer("👋 Γεια σου! Στείλε /remind [χρόνος σε λεπτά] [μήνυμα] για να αποθηκεύσεις μια υπενθύμιση.")
+    await message.answer("👋 Γεια σου! Στείλε /remind [χρόνος] [μονάδα χρόνου] [μήνυμα] για να αποθηκεύσεις μια υπενθύμιση. Π.χ. /remind 2 ώρες Να πάρω τηλέφωνο.")
+
+# Συνάρτηση για μετατροπή χρόνου
+TIME_UNITS = {
+    "λεπτό": 60, "λεπτά": 60, "λεπτ": 60,
+    "ώρα": 3600, "ώρες": 3600,
+    "μέρα": 86400, "μέρες": 86400,
+    "εβδομάδα": 604800, "εβδομάδες": 604800,
+    "μήνα": 2592000, "μήνες": 2592000,
+    "χρόνος": 31536000, "χρόνια": 31536000
+}
+
+def parse_time_input(time_str, unit):
+    if unit in TIME_UNITS:
+        return int(time_str) * TIME_UNITS[unit]
+    return None
 
 # Χειριστής εντολής /remind
 @router.message(Command("remind"))
 async def remind_command(message: types.Message):
     try:
-        args = message.text.split(maxsplit=2)
-        if len(args) < 3:
-            raise ValueError("❌ Χρήση: /remind <λεπτά> <μήνυμα>")
+        args = message.text.split(maxsplit=3)
+        if len(args) < 4:
+            raise ValueError("❌ Χρήση: /remind <αριθμός> <μονάδα χρόνου> <μήνυμα>")
 
-        minutes = int(args[1])
-        reminder_text = args[2]
-        reminder_time = datetime.now() + timedelta(minutes=minutes)
+        time_value = args[1]
+        time_unit = args[2]
+        reminder_text = args[3]
+        
+        seconds = parse_time_input(time_value, time_unit)
+        if seconds is None:
+            raise ValueError("❌ Μη έγκυρη μονάδα χρόνου. Δοκίμασε λεπτά, ώρες, μέρες, μήνες, χρόνια.")
 
+        reminder_time = datetime.now() + timedelta(seconds=seconds)
         await save_reminder(message.from_user.id, reminder_text, reminder_time)
-        await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {minutes} λεπτά.")
+        await message.answer(f"✅ Υπενθύμιση αποθηκεύτηκε! Θα λάβεις το μήνυμα σε {time_value} {time_unit}.")
 
     except ValueError as e:
         await message.answer(str(e))
-
-# Χειριστής εντολής /list_reminders
-@router.message(Command("list_reminders"))
-async def list_reminders(message: types.Message):
-    conn, cursor = connect_db()
-    cursor.execute("SELECT id, message, reminder_time FROM reminders WHERE user_id = %s ORDER BY reminder_time ASC", (message.from_user.id,))
-    reminders = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    if not reminders:
-        await message.answer("🔹 Δεν έχεις αποθηκευμένες υπενθυμίσεις.")
-        return
-
-    response = "📌 Οι υπενθυμίσεις σου:\n"
-    for reminder in reminders:
-        reminder_id, reminder_text, reminder_time = reminder
-        formatted_time = reminder_time.strftime("%Y-%m-%d %H:%M")
-        response += f"🆔 {reminder_id} | {formatted_time} - {reminder_text}\n"
-
-    await message.answer(response)
-
-# Χειριστής εντολής /delete_reminder
-@router.message(Command("delete_reminder"))
-async def delete_reminder(message: types.Message):
-    try:
-        args = message.text.split()
-        if len(args) < 2:
-            raise ValueError("❌ Χρήση: /delete_reminder <ID>")
-        
-        reminder_id = int(args[1])
-        conn, cursor = connect_db()
-        cursor.execute("DELETE FROM reminders WHERE id = %s AND user_id = %s RETURNING id", (reminder_id, message.from_user.id))
-        deleted = cursor.fetchone()
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        if deleted:
-            await message.answer(f"🗑️ Η υπενθύμιση με ID {reminder_id} διαγράφηκε επιτυχώς.")
-        else:
-            await message.answer("⚠️ Δεν βρέθηκε υπενθύμιση με αυτό το ID.")
-    except ValueError:
-        await message.answer("❌ Το ID πρέπει να είναι αριθμός.")
 
 # Εκκίνηση της υπενθύμισης στο παρασκήνιο
 async def main():
