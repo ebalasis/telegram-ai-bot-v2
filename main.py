@@ -37,9 +37,23 @@ router = Router()
 dp = Dispatcher()
 
 # Google Calendar API Setup
+import json
+
 def get_calendar_service():
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return build('calendar', 'v3', credentials=creds)
+    credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+
+    if not credentials_json:
+        logging.error("❌ GOOGLE_CREDENTIALS δεν έχει οριστεί στο περιβάλλον.")
+        return None
+
+    try:
+        creds_info = json.loads(credentials_json)
+        creds = service_account.Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        return build('calendar', 'v3', credentials=creds)
+    except Exception as e:
+        logging.error(f"❌ Σφάλμα κατά τη φόρτωση των credentials: {e}")
+        return None
+
 
 # **Συνάρτηση για αποθήκευση υπενθυμίσεων**
 async def save_reminder(user_id, message, reminder_time, repeat_interval=None):
